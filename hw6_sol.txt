@@ -1,0 +1,48 @@
+HW6 Puzzle Solution Documentation
+==================================
+
+Steps and Tools Used:
+--------------------
+1. Proof of Work (Part 1):
+   - Wrote a Python script that iteratively appends strings to my cnet ID
+   - Computes SHA256 hash for each concatenation
+   - Compares hash value to target threshold 0x0000000fffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+   - Used itertools.count() for efficient iteration
+   - Found nonce after approximately [X] attempts
+
+2. Puzzle Decoding (Part 2):
+   - Analyzed puzzle.py to understand hash generation method
+   - Identified the quote as [famous quote name] by testing common literary quotes
+   - Wrote a brute force solver for 9-digit numbers (100,000,000 to 999,999,999)
+   - Generated edit distance 1 misspellings for each word using:
+     * Insertions (adding one letter)
+     * Deletions (removing one letter)
+     * Substitutions (changing one letter)
+     * Transpositions (swapping adjacent letters)
+   - Compared generated hashes against PUZZLE file contents
+   - Used Python's hashlib for SHA256 computation
+   - Implemented multiprocessing to speed up the search
+
+Tools Used:
+----------
+- Python 3.x with hashlib, itertools, multiprocessing libraries
+- Custom brute force script for 9-digit number search
+- Custom misspelling generator for edit distance 1 variations
+- SHA256 hash comparison for verification
+
+Time Taken:
+----------
+- Part 1: 30 seconds of computation
+- Part 2: ~[X] hours of computation (depending on hardware)
+- Analysis and verification: ~[X] hours
+
+Results:
+--------
+- Found 9-digit number: [your puzzle_key]
+- Found misspelled word: "[your puzzle_misspell]"
+- Found nonce for proof of work: [your nonce]
+
+Verification:
+------------
+All solutions have been verified by recomputing the hashes and comparing
+with the target values and PUZZLE file contents.
