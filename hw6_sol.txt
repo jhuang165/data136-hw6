@@ -1,48 +1,76 @@
-HW6 Puzzle Solution Documentation
-==================================
+HW6 Puzzle Solution
+CNet ID: jhuang165
 
-Steps and Tools Used:
---------------------
-1. Proof of Work (Part 1):
-   - Wrote a Python script that iteratively appends strings to my cnet ID
-   - Computes SHA256 hash for each concatenation
-   - Compares hash value to target threshold 0x0000000fffffffffffffffffffffffffffffffffffffffffffffffffffffffff
-   - Used itertools.count() for efficient iteration
-   - Found nonce after approximately [X] attempts
+Part 1 – Proof of Work
 
-2. Puzzle Decoding (Part 2):
-   - Analyzed puzzle.py to understand hash generation method
-   - Identified the quote as [famous quote name] by testing common literary quotes
-   - Wrote a brute force solver for 9-digit numbers (100,000,000 to 999,999,999)
-   - Generated edit distance 1 misspellings for each word using:
-     * Insertions (adding one letter)
-     * Deletions (removing one letter)
-     * Substitutions (changing one letter)
-     * Transpositions (swapping adjacent letters)
-   - Compared generated hashes against PUZZLE file contents
-   - Used Python's hashlib for SHA256 computation
-   - Implemented multiprocessing to speed up the search
+Goal: find a string appended to my CNet ID such that
+SHA256(cnet_id + nonce) < 0000000fffffffffffffffffffffffffffffffffffffffffffffffffffffffff
 
-Tools Used:
-----------
-- Python 3.x with hashlib, itertools, multiprocessing libraries
-- Custom brute force script for 9-digit number search
-- Custom misspelling generator for edit distance 1 variations
-- SHA256 hash comparison for verification
+This is equivalent to finding a SHA256 hash with the first 7 hexadecimal digits equal to 0.
 
-Time Taken:
-----------
-- Part 1: 30 seconds of computation
-- Part 2: ~[X] hours of computation (depending on hardware)
-- Analysis and verification: ~[X] hours
+I wrote a Python program using hashlib and multiprocessing to brute-force nonces until a valid hash was found.
 
-Results:
---------
-- Found 9-digit number: [your puzzle_key]
-- Found misspelled word: "[your puzzle_misspell]"
-- Found nonce for proof of work: [your nonce]
+Result:
 
-Verification:
-------------
-All solutions have been verified by recomputing the hashes and comparing
-with the target values and PUZZLE file contents.
+nonce = 14948743
+
+SHA256("jhuang16514948743") =
+00000004ed11f293517c268630b4890ffecbf23d468a7a035debdddbab6507ef
+
+Runtime: 152.81 seconds on an AMD Ryzen 9950X3D CPU.
+
+
+Part 2 – Puzzle
+
+The file PUZZLE contains SHA256 hashes of tokens of the form:
+
+    SHA256(str(key) + token)
+
+where key is a 9-digit number.
+
+Step 1 – Find the key
+I searched the 9-digit key space in parallel and tested common tokens such as
+"the", "and", "of", etc. against the puzzle hash set.
+
+A match was found for token "the", giving:
+
+puzzle_key = 747585522
+
+
+Step 2 – Decode the message
+Using the discovered key, I generated candidate tokens from a dictionary
+(wordfreq top English words) and tested variants with capitalization and punctuation.
+
+Matching hashes revealed most tokens of the message.
+
+
+Step 3 – Identify the source text
+The partially decoded message matched a quotation from:
+
+E. T. Jaynes – "Probability Theory: The Logic of Science" (Preface)
+
+The correct sentence includes the words:
+"Pólya’s", "5", "disbelievers", and "circumstances".
+
+
+Step 4 – Find the misspelling
+All tokens except one were matched exactly.
+
+The final unknown hash corresponded to a misspelled version of
+"circumstances".
+
+By generating edit-distance-1 and edit-distance-2 variants and hashing them,
+I found the matching token:
+
+cirupmstances
+
+Thus:
+
+puzzle_misspell = "cirupmstances"
+
+
+Final Answers
+
+puzzle_key = 747585522
+puzzle_misspell = "cirupmstances"
+nonce = 14948743

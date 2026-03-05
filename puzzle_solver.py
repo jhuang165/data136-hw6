@@ -1,256 +1,169 @@
 #!/usr/bin/env python3
-"""
-Puzzle Solver for HW6 Part 2
-Find 9-digit number and misspelled word that produce the given SHA256 hashes
-"""
-
 import hashlib
 import itertools
+import os
+import re
+import sys
 import time
-from typing import List, Set, Tuple, Optional
-from multiprocessing import Pool, cpu_count
+from multiprocessing import Process, Event, Queue, cpu_count
+from typing import Dict, List, Set, Tuple
 
-def load_puzzle_hashes(filename='PUZZLE') -> List[str]:
-    """Load target hashes from PUZZLE file"""
-    try:
-        with open(filename, 'r') as f:
-            hashes = [line.strip() for line in f if line.strip()]
-        print(f"Loaded {len(hashes)} target hashes from {filename}")
-        return hashes
-    except FileNotFoundError:
-        print(f"Error: {filename} not found!")
-        return []
+PUZZLE_PATH = "PUZZLE"  # rename/copy your provided PUZZLE file to this, or change path here
 
-def generate_misspellings(word: str) -> Set[str]:
-    """
-    Generate all edit distance 1 misspellings of a word
-    
-    Includes:
-    - Insertions (add one letter)
-    - Deletions (remove one letter)
-    - Substitutions (change one letter)
-    - Transpositions (swap adjacent letters)
-    """
-    misspellings = set()
-    letters = 'abcdefghijklmnopqrstuvwxyz'
-    
-    word = word.lower()
-    
-    # Insertions
-    for i in range(len(word) + 1):
-        for c in letters:
-            misspelling = word[:i] + c + word[i:]
-            misspellings.add(misspelling)
-    
-    # Deletions
-    for i in range(len(word)):
-        misspelling = word[:i] + word[i+1:]
-        misspellings.add(misspelling)
-    
-    # Substitutions
-    for i in range(len(word)):
-        for c in letters:
-            if c != word[i]:
-                misspelling = word[:i] + c + word[i+1:]
-                misspellings.add(misspelling)
-    
-    # Transpositions
-    for i in range(len(word) - 1):
-        chars = list(word)
-        chars[i], chars[i+1] = chars[i+1], chars[i]
-        misspelling = ''.join(chars)
-        misspellings.add(misspelling)
-    
-    # Remove the original word
-    misspellings.discard(word)
-    
-    return misspellings
+COMMON_TOKENS = [
+    "the", "The", "the,", "the.", "and", "And", "and,", "of", "to", "in", "a", "I", "it", "is", "that",
+    ":", ";", ",", ".", "!", "?", "\"", "'", "--", "-"
+]
 
-def generate_word_variations(word: str) -> Set[str]:
-    """Generate variations with capitalization and punctuation"""
-    variations = set()
-    
-    # Capitalization variations
-    variations.add(word)
-    variations.add(word.lower())
-    variations.add(word.upper())
-    variations.add(word.capitalize())
-    variations.add(word.title())
-    
-    # Common punctuation
-    for punct in ['', '.', ',', '!', '?', ';', ':', '-', '--', '...']:
-        variations.add(word + punct)
-        variations.add(punct + word)
-    
-    return variations
+PUNCT_SUFFIXES = ["", ",", ".", "!", "?", ":", ";", "\"", "'", "'s"]
+CAP_VARIANTS = lambda w: {w, w.lower(), w.capitalize()}
 
-def try_number_range(args):
-    """Try a range of numbers (for multiprocessing)"""
-    start_num, end_num, quote_words, target_hashes_set = args
-    
-    results = []
-    target_set = set(target_hashes_set)
-    
-    for number in range(start_num, end_num):
-        if number % 100000 == 0:
-            print(f"Progress: {start_num}-{end_num} at {number}")
-        
-        # Try with correct spelling
-        message = f"{number} " + " ".join(quote_words)
-        hash_result = hashlib.sha256(message.encode()).hexdigest()
-        
-        if hash_result in target_set:
-            results.append(('correct', number, None, None, hash_result))
-            continue
-        
-        # Try with misspellings
-        for word_idx, word in enumerate(quote_words):
-            misspellings = generate_misspellings(word)
-            
-            for misspelling in misspellings:
-                modified_words = quote_words.copy()
-                modified_words[word_idx] = misspelling
-                test_message = f"{number} " + " ".join(modified_words)
-                test_hash = hashlib.sha256(test_message.encode()).hexdigest()
-                
-                if test_hash in target_set:
-                    results.append(('misspelling', number, word_idx, misspelling, test_hash))
-    
-    return results
+def sha256_hex(b: bytes) -> str:
+    return hashlib.sha256(b).hexdigest()
 
-def solve_puzzle():
-    """Main puzzle solver"""
-    target_hashes = load_puzzle_hashes()
-    if not target_hashes:
-        return
-    
-    # Famous quotes to try
-    # TODO: Add more quotes until you find the right one
-    famous_quotes = [
-        "To be or not to be that is the question",
-        "All that glitters is not gold",
-        "The only thing we have to fear is fear itself",
-        "Ask not what your country can do for you ask what you can do for your country",
-        "I have a dream that my four little children will one day live in a nation where they will not be judged by the color of their skin but by the content of their character",
-        "The best and most beautiful things in the world cannot be seen or even touched they must be felt with the heart",
-        # Add more quotes here
-    ]
-    
-    print("Starting puzzle solver...")
-    print(f"Target hashes: {target_hashes}")
-    
-    for quote_idx, quote in enumerate(famous_quotes):
-        print(f"\nTrying quote {quote_idx + 1}: {quote[:50]}...")
-        words = quote.split()
-        
-        # Try all 9-digit numbers (100,000,000 to 999,999,999)
-        # Split into ranges for multiprocessing
-        num_ranges = []
-        range_size = 10000000  # 10 million numbers per process
-        for start in range(100000000, 1000000000, range_size):
-            end = min(start + range_size, 1000000000)
-            num_ranges.append((start, end, words, target_hashes))
-        
-        # Use multiprocessing to speed up the search
-        with Pool(processes=cpu_count()) as pool:
-            results = pool.map(try_number_range, num_ranges)
-            
-            # Flatten results
-            for result_batch in results:
-                for result in result_batch:
-                    result_type, number, word_idx, misspelling, hash_val = result
-                    
-                    if result_type == 'correct':
-                        print("\n" + "=" * 50)
-                        print(f"FOUND CORRECT QUOTE!")
-                        print(f"Number: {number}")
-                        print(f"Quote: {quote}")
-                        print(f"Hash: {hash_val}")
-                        print("=" * 50)
-                        
-                        # Now search for misspelling
-                        print("\nSearching for misspelled version...")
-                        for w_idx, w in enumerate(words):
-                            misspellings = generate_misspellings(w)
-                            for m in misspellings:
-                                modified = words.copy()
-                                modified[w_idx] = m
-                                test_msg = f"{number} " + " ".join(modified)
-                                test_h = hashlib.sha256(test_msg.encode()).hexdigest()
-                                
-                                if test_h in target_hashes and test_h != hash_val:
-                                    print(f"\nFOUND MISSPELLING!")
-                                    print(f"Original word: '{w}'")
-                                    print(f"Misspelled as: '{m}'")
-                                    print(f"Full message: {test_msg}")
-                                    print(f"Hash: {test_h}")
-                                    return number, m
-                    
-                    elif result_type == 'misspelling':
-                        print("\n" + "=" * 50)
-                        print(f"FOUND MISSPELLING FIRST!")
-                        print(f"Number: {number}")
-                        print(f"Original word: '{words[word_idx]}'")
-                        print(f"Misspelled as: '{misspelling}'")
-                        print(f"Quote: {quote}")
-                        print(f"Hash: {hash_val}")
-                        print("=" * 50)
-                        return number, misspelling
-    
-    return None, None
+def load_puzzle_hashes(path: str) -> List[str]:
+    with open(path, "r", encoding="utf-8") as f:
+        return [line.strip() for line in f if line.strip()]
 
-def verify_solution(number: int, misspelled_word: str):
-    """Verify that the found solution is correct"""
-    target_hashes = load_puzzle_hashes()
-    
-    # TODO: Add the correct quote here once you find it
-    quote = "To be or not to be that is the question"  # Replace with actual quote
-    
-    # Generate all variations to verify
-    words = quote.split()
-    found_hashes = []
-    
-    # Correct version
-    correct_msg = f"{number} " + " ".join(words)
-    correct_hash = hashlib.sha256(correct_msg.encode()).hexdigest()
-    found_hashes.append(correct_hash)
-    
-    # Misspelled version
-    for i, word in enumerate(words):
-        if word.lower() == misspelled_word.lower():
-            modified = words.copy()
-            modified[i] = misspelled_word
-            misspelled_msg = f"{number} " + " ".join(modified)
-            misspelled_hash = hashlib.sha256(misspelled_msg.encode()).hexdigest()
-            found_hashes.append(misspelled_hash)
+def key_bytes(k: int) -> bytes:
+    return f"{k:09d}".encode("utf-8")
+
+def find_key_worker(start_k: int, step: int, hashes_set: Set[str], stop: Event, out: Queue):
+    # Iterate keys: start_k, start_k+step, ...
+    k = start_k
+    while not stop.is_set() and k < 1_000_000_000:
+        kb = key_bytes(k)
+        for tok in COMMON_TOKENS:
+            h = sha256_hex(kb + tok.encode("utf-8"))
+            if h in hashes_set:
+                out.put((k, tok, h))
+                stop.set()
+                return
+        k += step
+
+def find_key_parallel(hashes_set: Set[str]) -> Tuple[int, str, str]:
+    stop = Event()
+    out = Queue()
+    procs = []
+    nproc = cpu_count()
+
+    for i in range(nproc):
+        p = Process(target=find_key_worker, args=(i, nproc, hashes_set, stop, out), daemon=True)
+        p.start()
+        procs.append(p)
+
+    k, tok, h = out.get()
+    for p in procs:
+        p.terminate()
+    return k, tok, h
+
+def iter_dictionary_words() -> List[str]:
+    # Prefer system dictionary if available
+    candidates = []
+    for path in ["/usr/share/dict/words", "/usr/dict/words"]:
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    w = line.strip()
+                    if w and w.isalpha() and 1 <= len(w) <= 20:
+                        candidates.append(w)
             break
-    
-    print("\nVerification:")
-    print(f"Number: {number}")
-    print(f"Misspelled word: {misspelled_word}")
-    print(f"Found hashes: {found_hashes}")
-    print(f"Target hashes: {target_hashes}")
-    print(f"All hashes match: {set(found_hashes) == set(target_hashes)}")
+    # Fallback: minimal list if no system dictionary
+    if not candidates:
+        candidates = ["the", "and", "to", "of", "in", "a", "I", "it", "is", "that"]
+    return candidates
+
+def token_variants(word: str) -> Set[str]:
+    out = set()
+    for cap in CAP_VARIANTS(word):
+        for suf in PUNCT_SUFFIXES:
+            out.add(cap + suf)
+    return out
+
+def decode_message(hashes_in_order: List[str], key: int) -> List[str]:
+    remaining = set(hashes_in_order)
+    mapping: Dict[str, str] = {}
+
+    kb = key_bytes(key)
+
+    # First pass: dictionary words (with light cap/punct variants)
+    words = iter_dictionary_words()
+    for w in words:
+        for t in token_variants(w):
+            h = sha256_hex(kb + t.encode("utf-8"))
+            if h in remaining:
+                mapping[h] = t
+                remaining.remove(h)
+        if not remaining:
+            break
+
+    # If anything still left, try some extra “small tokens” often in quotes
+    extras = ["—", "–", "(", ")", "[", "]"]
+    for t in extras:
+        h = sha256_hex(kb + t.encode("utf-8"))
+        if h in remaining:
+            mapping[h] = t
+            remaining.remove(h)
+
+    # Produce message tokens in the original order
+    decoded = [mapping.get(h, f"<UNKNOWN:{h[:8]}>") for h in hashes_in_order]
+    return decoded
+
+def edits1(word: str) -> Set[str]:
+    # edit distance 1: insert, delete, replace, transpose
+    letters = "abcdefghijklmnopqrstuvwxyz"
+    splits = [(word[:i], word[i:]) for i in range(len(word) + 1)]
+    deletes = {L + R[1:] for L, R in splits if R}
+    transposes = {L + R[1] + R[0] + R[2:] for L, R in splits if len(R) > 1}
+    replaces = {L + c + R[1:] for L, R in splits if R for c in letters}
+    inserts = {L + c + R for L, R in splits for c in letters}
+    return deletes | transposes | replaces | inserts
+
+def find_misspelling(tokens: List[str]) -> Tuple[str, str]:
+    # load dictionary set for spell-check
+    dict_words = set(w.lower() for w in iter_dictionary_words())
+    # strip punctuation for checking, but return original token
+    for tok in tokens:
+        core = re.sub(r"^[^A-Za-z]+|[^A-Za-z]+$", "", tok)
+        if not core:
+            continue
+        lc = core.lower()
+        if lc in dict_words:
+            continue
+        # try to find a likely intended word at edit distance 1
+        for cand in edits1(lc):
+            if cand in dict_words:
+                return tok, cand
+    return "", ""
+
+def main():
+    hashes_in_order = load_puzzle_hashes(PUZZLE_PATH)
+    hashes_set = set(hashes_in_order)
+
+    print(f"Loaded {len(hashes_in_order)} hashes from {PUZZLE_PATH}")
+
+    t0 = time.time()
+    key, tok, h = find_key_parallel(hashes_set)
+    t1 = time.time()
+    print(f"FOUND KEY: {key:09d} (matched token '{tok}' -> {h}) in {t1-t0:.2f}s")
+
+    decoded_tokens = decode_message(hashes_in_order, key)
+    message = " ".join(decoded_tokens)
+    print("\nDECODED (best effort):\n")
+    print(message)
+
+    misspell, intended = find_misspelling(decoded_tokens)
+    if misspell:
+        print(f"\nMISSPELLING FOUND: '{misspell}' (likely intended '{intended}')")
+    else:
+        print("\nNo misspelling detected with current dictionary; expand word sources/variants.")
+
+    # write required outputs for your repo
+    with open("puzzle_solution_out.txt", "w", encoding="utf-8") as f:
+        f.write(f"puzzle_key={key:09d}\n")
+        f.write(f"message={message}\n")
+        f.write(f"misspell={misspell}\n")
+        f.write(f"intended={intended}\n")
 
 if __name__ == "__main__":
-    print("HW6 Part 2 - Puzzle Solver")
-    print("=" * 50)
-    
-    # Run the solver
-    number, misspelling = solve_puzzle()
-    
-    if number and misspelling:
-        print("\n" + "=" * 50)
-        print("SOLUTION FOUND!")
-        print("=" * 50)
-        print(f"puzzle_key = {number}")
-        print(f"puzzle_misspell = '{misspelling}'")
-        
-        # Verify the solution
-        verify_solution(number, misspelling)
-        
-        print("\nAdd these to your puzzle.py:")
-        print(f"puzzle_key = {number}")
-        print(f'puzzle_misspell = "{misspelling}"')
-    else:
-        print("\nNo solution found. Try adding more quotes to try.")
+    main()

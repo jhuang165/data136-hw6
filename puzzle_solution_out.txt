@@ -1,0 +1,5 @@
+puzzle_key=747585522
+puzzle_misspell=
+likely_intended=
+unknown_tokens=4
+message=As one would expect already from <UNKNOWN:0aa5e94e> examples, probability theory as extended logic reproduces many aspects of human mental activity, sometimes in surprising and even disturbing detail. In Chapter <UNKNOWN:1bcf669e> we find our equations exhibiting the phenomenon of a person who tells the truth and is not believed, even though the <UNKNOWN:56f63b4e> are reasoning consistently. The theory explains why and under what <UNKNOWN:b27ab8f1> this will happen.
